@@ -43,9 +43,9 @@ android {
 }
 dependencies {
   // Check if the AAR file exists in the libs directory
-  def aarFile = file('libs/samsungpay.jar')
-  if (aarFile.exists()) {
-    implementation files('libs/samsungpay.jar')
+  def jarFile = rootProject.file('libs/samsungpay.jar')
+  if (jarFile.exists()) {
+    implementation files(jarFile)
   } else {
     // Provide a helpful error message
     println "⚠️  Warning: Samsung Pay SDK (samsungpay.jar) not found in ${aarFile.absolutePath}"
