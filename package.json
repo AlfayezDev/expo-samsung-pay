@@ -1,6 +1,6 @@
 {
 	"name": "expo-samsung-pay",
-	"version": "0.1.8",
+	"version": "0.1.9",
 	"description": "Samsung pay using expo modules api",
 	"main": "build/index.js",
 	"types": "build/index.d.ts",
