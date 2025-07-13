@@ -1,0 +1,44 @@
+{
+	"name": "expo-samsung-pay",
+	"version": "0.1.8",
+	"description": "Samsung pay using expo modules api",
+	"main": "build/index.js",
+	"types": "build/index.d.ts",
+	"scripts": {
+		"build": "expo-module build",
+		"clean": "expo-module clean",
+		"lint": "expo-module lint",
+		"test": "expo-module test",
+		"prepare": "expo-module prepare",
+		"prepublishOnly": "expo-module prepublishOnly",
+		"expo-module": "expo-module",
+		"open:ios": "xed example/ios",
+		"open:android": "open -a \"Android Studio\" example/android"
+	},
+	"keywords": [
+		"react-native",
+		"expo",
+		"expo-samsung-pay",
+		"ExpoSamsungPay"
+	],
+	"repository": "https://github.com/AlfayezDev/expo-samsung-pay",
+	"bugs": {
+		"url": "https://github.com/AlfayezDev/expo-samsung-pay/issues"
+	},
+	"author": "AlfayezDev <mohammed@alfayez.dev> (https://github.com/AlfayezDev)",
+	"license": "MIT",
+	"homepage": "https://github.com/AlfayezDev/expo-samsung-pay#readme",
+	"dependencies": {},
+	"devDependencies": {
+		"@types/react": "~19.0.10",
+		"expo": "*",
+		"expo-module-scripts": "^4.1.9",
+		"react": "*",
+		"react-native": "*"
+	},
+	"peerDependencies": {
+		"expo": "*",
+		"react": "*",
+		"react-native": "*"
+	}
+}

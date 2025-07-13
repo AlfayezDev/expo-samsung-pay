@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-samsung-pay": ["../src/index"],
+      "expo-samsung-pay/*": ["../src/*"]
+    }
+  }
+}
