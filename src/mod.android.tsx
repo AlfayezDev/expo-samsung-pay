@@ -2,10 +2,10 @@ import React from "react";
 import SamsungPayView from "./ExpoSamsungPayView";
 import SamsungPayModule from "./ExpoSamsungPayModule";
 import type {
-	ButtonProps,
 	CanMakePaymentsResponse,
 	InitiatePaymentResponse,
 	SamsungPayOptions,
+	SamsungPayViewProps,
 } from "./ExpoSamsungPay.types";
 
 export async function canMakePayments(
@@ -20,7 +20,9 @@ export async function initiatePayment(
 	return SamsungPayModule.initiatePayment(options);
 }
 
-export function SamsungPayButton(props: ButtonProps) {
+export function SamsungPayButton(
+	props: SamsungPayViewProps & SamsungPayOptions,
+) {
 	return (
 		<SamsungPayView
 			width={props.width}

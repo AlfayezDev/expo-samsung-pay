@@ -1,4 +1,4 @@
-import { ViewStyle } from "react-native";
+import { DimensionValue } from "react-native";
 
 export interface PaymentError {
 	code: string;
@@ -60,12 +60,11 @@ export interface ButtonOptions {
 	isLoading?: boolean;
 }
 
-export interface ButtonProps
-	extends ButtonOptions,
-		ViewStyle,
-		SamsungPayOptions {
-	onPaymentCompleted?: (result: PaymentStatus) => void;
+export interface SamsungPayViewProps extends ButtonOptions {
+	width?: DimensionValue;
+	height?: DimensionValue;
+	onPaymentCompleted?: (data: InitiatePaymentResponse) => void;
 	onPaymentFailed?: (error: PaymentError) => void;
-	onButtonClicked?: () => void;
+	paymentOptions?: SamsungPayOptions;
 	onPress?: () => void;
 }

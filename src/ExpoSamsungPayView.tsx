@@ -1,22 +1,8 @@
 import React, { useEffect, useCallback } from "react";
 import { TouchableOpacity, Text, ActivityIndicator } from "react-native";
-import type { ViewStyle, TextStyle, DimensionValue } from "react-native";
+import type { ViewStyle, TextStyle } from "react-native";
 import SamsungPayModule from "./ExpoSamsungPayModule";
-import type {
-	ButtonOptions,
-	SamsungPayOptions,
-	PaymentStatus,
-	PaymentError,
-} from "./ExpoSamsungPay.types";
-
-interface SamsungPayViewProps extends ButtonOptions {
-	width?: DimensionValue;
-	height?: DimensionValue;
-	onPaymentCompleted?: (data: PaymentStatus) => void;
-	onPaymentFailed?: (error: PaymentError) => void;
-	paymentOptions?: SamsungPayOptions;
-	onPress?: () => void;
-}
+import type { SamsungPayViewProps } from "./ExpoSamsungPay.types";
 
 export default function SamsungPayView(props: SamsungPayViewProps) {
 	const {
@@ -36,27 +22,17 @@ export default function SamsungPayView(props: SamsungPayViewProps) {
 	const handlePress = useCallback(async () => {
 		if (paymentOptions) {
 			const response = await SamsungPayModule.initiatePayment(paymentOptions);
-			if (response.success) {
-				onPaymentCompleted?.(response.data);
-			} else {
-				onPaymentFailed?.(response.error);
-			}
+			onPaymentCompleted?.(response);
 			return;
 		}
 		onPress?.();
-	}, [paymentOptions, onPress, onPaymentCompleted, onPaymentFailed]);
+	}, [paymentOptions, onPress, onPaymentCompleted]);
 
 	useEffect(() => {
-		const completedSub = SamsungPayModule.addListener(
-			"onPaymentCompleted",
-			onPaymentCompleted || (() => {}),
-		);
-		const failedSub = SamsungPayModule.addListener(
-			"onPaymentFailed",
-			onPaymentFailed || (() => {}),
-		);
+		const failedSub = SamsungPayModule.addListener("onPaymentFailed", (e) => {
+			if (onPaymentFailed) onPaymentFailed?.(e);
+		});
 		return () => {
-			completedSub.remove();
 			failedSub.remove();
 		};
 	}, [onPaymentCompleted, onPaymentFailed]);

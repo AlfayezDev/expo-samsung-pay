@@ -1,12 +1,24 @@
-import { Platform } from "react-native";
-import type { ButtonProps } from "./ExpoSamsungPay.types";
+import type {
+	CanMakePaymentsResponse,
+	SamsungPayOptions,
+	SamsungPayViewProps,
+} from "./ExpoSamsungPay.types";
 
-export async function canMakePayments(_: string): Promise<boolean> {
-	if (Platform.OS !== "android") return false;
-
-	return false;
+export async function canMakePayments(
+	_: string,
+): Promise<CanMakePaymentsResponse> {
+	return {
+		success: false,
+		error: {
+			code: "INVALID_DEVICE",
+			message: "Not a valid device",
+			recoverable: false,
+		},
+	};
 }
 
-export const SamsungPayButton = (_: ButtonProps) => {
+export const SamsungPayButton = (
+	_: SamsungPayViewProps & SamsungPayOptions,
+) => {
 	return null;
 };
