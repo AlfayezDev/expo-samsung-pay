@@ -1,21 +1,26 @@
 import React from "react";
-import { Platform } from "react-native";
 import SamsungPayView from "./ExpoSamsungPayView";
 import SamsungPayModule from "./ExpoSamsungPayModule";
-import type { ButtonProps } from "./ExpoSamsungPay.types";
+import type {
+	ButtonProps,
+	CanMakePaymentsResponse,
+	InitiatePaymentResponse,
+	SamsungPayOptions,
+} from "./ExpoSamsungPay.types";
 
-export async function canMakePayments(serviceId: string): Promise<boolean> {
-	if (Platform.OS !== "android") return false;
-
-	try {
-		return await SamsungPayModule.canMakePayments(serviceId).catch(() => false);
-	} catch {
-		return false;
-	}
+export async function canMakePayments(
+	serviceId: string,
+): Promise<CanMakePaymentsResponse> {
+	return SamsungPayModule.canMakePayments(serviceId);
 }
-export const SamsungPayButton = (props: ButtonProps) => {
-	if (Platform.OS !== "android") return null;
 
+export async function initiatePayment(
+	options: SamsungPayOptions,
+): Promise<InitiatePaymentResponse> {
+	return SamsungPayModule.initiatePayment(options);
+}
+
+export function SamsungPayButton(props: ButtonProps) {
 	return (
 		<SamsungPayView
 			width={props.width}
@@ -28,7 +33,15 @@ export const SamsungPayButton = (props: ButtonProps) => {
 			onPaymentCompleted={props.onPaymentCompleted}
 			onPaymentFailed={props.onPaymentFailed}
 			onPress={props.onPress}
-			paymentOptions={props}
+			paymentOptions={{
+				serviceId: props.serviceId,
+				merchantName: props.merchantName,
+				orderNumber: props.orderNumber,
+				merchantCountryCode: props.merchantCountryCode,
+				amount: props.amount,
+				allowedCardBrands: props.allowedCardBrands,
+				items: props.items,
+			}}
 		/>
 	);
-};
+}

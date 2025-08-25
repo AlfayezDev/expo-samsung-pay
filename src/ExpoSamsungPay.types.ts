@@ -1,11 +1,34 @@
 import { ViewStyle } from "react-native";
 
-export type PaymentStatus = {
-	status: "success" | "error";
-	credential?: string;
-	errorCode?: number;
-	errorDescription?: string;
-};
+export interface PaymentError {
+	code: string;
+	message: string;
+	recoverable: boolean;
+	details?: Record<string, any>;
+}
+
+export interface CanMakePaymentsResult {
+	canMakePayments: boolean;
+	status: "READY" | "NOT_READY" | "NOT_SUPPORTED" | "UNKNOWN";
+	needsActivation: boolean;
+}
+
+export interface PaymentStatus {
+	status: "success";
+	credential: string;
+	orderNumber: string;
+	merchantName: string;
+	timestamp: number;
+	extraData: Record<string, any>;
+}
+
+export type CanMakePaymentsResponse =
+	| { success: true; data: CanMakePaymentsResult }
+	| { success: false; error: PaymentError };
+
+export type InitiatePaymentResponse =
+	| { success: true; data: PaymentStatus }
+	| { success: false; error: PaymentError };
 
 export type SupportedBrand =
 	| "VISA"
@@ -14,33 +37,35 @@ export type SupportedBrand =
 	| "DISCOVER"
 	| "MADA";
 
-export type SamsungPayOptions = {
+export interface SamsungPayOptions {
 	serviceId: string;
 	merchantName: string;
 	orderNumber: string;
 	merchantCountryCode: string;
 	amount: number;
-	supportedBrands?: SupportedBrand[];
+	allowedCardBrands?: SupportedBrand[];
 	items: Array<{
 		id: string;
 		name: string;
 		amount: number;
 		description?: string;
 	}>;
-};
+}
 
-export type ButtonOptions = {
+export interface ButtonOptions {
 	type?: "pay" | "buy" | "checkout";
 	style?: "black" | "white" | "color";
 	radius?: number;
 	isDisabled?: boolean;
 	isLoading?: boolean;
-};
+}
 
-export type ButtonProps = ButtonOptions &
-	ViewStyle & {
-		onPaymentCompleted?: (status: PaymentStatus) => void;
-		onPaymentFailed?: (status: PaymentStatus) => void;
-		onButtonClicked?: () => void;
-		onPress?: () => void;
-	} & SamsungPayOptions;
+export interface ButtonProps
+	extends ButtonOptions,
+		ViewStyle,
+		SamsungPayOptions {
+	onPaymentCompleted?: (result: PaymentStatus) => void;
+	onPaymentFailed?: (error: PaymentError) => void;
+	onButtonClicked?: () => void;
+	onPress?: () => void;
+}

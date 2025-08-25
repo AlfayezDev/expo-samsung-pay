@@ -15,193 +15,308 @@ import com.samsung.android.sdk.samsungpay.v2.payment.PaymentManager
 import com.samsung.android.sdk.samsungpay.v2.payment.sheet.AmountBoxControl
 import com.samsung.android.sdk.samsungpay.v2.payment.sheet.AmountConstants
 import com.samsung.android.sdk.samsungpay.v2.payment.sheet.CustomSheet
+
+data class PaymentError(
+ val code: String,
+ val message: String,
+ val recoverable: Boolean = false,
+ val details: Map<String, Any>? = null
+) {
+ fun toMap(): Map<String, Any> = mapOf(
+   "code" to code,
+   "message" to message,
+   "recoverable" to recoverable,
+   "details" to (details ?: emptyMap<String, Any>())
+ )
+}
+
+object ErrorCode {
+ const val VALIDATION = "VALIDATION_ERROR"
+ const val NETWORK = "NETWORK_ERROR"
+ const val NOT_SUPPORTED = "NOT_SUPPORTED"
+ const val USER_CANCELED = "USER_CANCELED"
+ const val AUTH_FAILED = "AUTH_FAILED"
+ const val CONFIG_ERROR = "CONFIG_ERROR"
+ const val SDK_ERROR = "SDK_ERROR"
+ const val UNKNOWN = "UNKNOWN_ERROR"
+}
+
+object Validator {
+ fun serviceId(value: String?): PaymentError? {
+   if (value.isNullOrBlank()) return PaymentError(ErrorCode.VALIDATION, "Service ID required")
+   if (!value.matches(Regex("^[A-Za-z0-9_-]+$"))) return PaymentError(ErrorCode.VALIDATION, "Invalid service ID format")
+   return null
+ }
+
+ fun amount(value: Double?): PaymentError? {
+   if (value == null || value <= 0) return PaymentError(ErrorCode.VALIDATION, "Invalid amount")
+   if (value > 999999999.99) return PaymentError(ErrorCode.VALIDATION, "Amount exceeds limit")
+   return null
+ }
+
+ fun merchant(name: String?, countryCode: String?): PaymentError? {
+   if (name.isNullOrBlank()) return PaymentError(ErrorCode.VALIDATION, "Merchant name required")
+   if (name.length > 100) return PaymentError(ErrorCode.VALIDATION, "Merchant name too long")
+   if (countryCode !== null && !countryCode.matches(Regex("^[A-Z]{2}$"))) return PaymentError(ErrorCode.VALIDATION, "Invalid country code")
+   return null
+ }
+
+ fun orderNumber(value: String?): PaymentError? {
+   if (value.isNullOrBlank()) return PaymentError(ErrorCode.VALIDATION, "Order number required")
+   if (value.length > 50) return PaymentError(ErrorCode.VALIDATION, "Order number too long")
+   return null
+ }
+
+ fun items(items: List<Map<String, Any>>?): PaymentError? {
+   items?.forEachIndexed { index, item ->
+     if (item["id"] as? String == null) return PaymentError(ErrorCode.VALIDATION, "Item $index: ID required")
+     if (item["name"] as? String == null) return PaymentError(ErrorCode.VALIDATION, "Item $index: Name required")
+     val amount = item["amount"] as? Number
+     if (amount == null || amount.toDouble() < 0) return PaymentError(ErrorCode.VALIDATION, "Item $index: Invalid amount")
+   }
+   return null
+ }
+}
+
+object ErrorMapper {
+ fun fromSdk(code: Int, bundle: Bundle): PaymentError {
+   return when (code) {
+     SpaySdk.ERROR_NO_NETWORK -> PaymentError(
+       ErrorCode.NETWORK,
+       "No network connection",
+       recoverable = true
+     )
+     SpaySdk.SPAY_NOT_SUPPORTED -> PaymentError(
+       ErrorCode.NOT_SUPPORTED,
+       "Samsung Pay not supported on device"
+     )
+     SpaySdk.ERROR_USER_CANCELED -> PaymentError(
+       ErrorCode.USER_CANCELED,
+       "Payment canceled",
+       recoverable = true
+     )
+     SpaySdk.ERROR_INVALID_PARAMETER -> PaymentError(
+       ErrorCode.VALIDATION,
+       bundle.getString("errorReasonMessage") ?: "Invalid parameter",
+       recoverable = true,
+       details = mapOf("reason" to (bundle.getString("errorReason") ?: "unknown"))
+     )
+     SpaySdk.ERROR_SPAY_APP_NEED_TO_UPDATE -> PaymentError(
+       ErrorCode.CONFIG_ERROR,
+       "Samsung Pay app needs update",
+       recoverable = true
+     )
+     SpaySdk.ERROR_SPAY_SETUP_NOT_COMPLETED -> PaymentError(
+       ErrorCode.CONFIG_ERROR,
+       "Samsung Pay setup incomplete",
+       recoverable = true
+     )
+     SpaySdk.ERROR_UNAUTHORIZED_REQUEST_TYPE,
+     SpaySdk.ERROR_NOT_ALLOWED,
+     SpaySdk.ERROR_PARTNER_NOT_APPROVED,
+     SpaySdk.ERROR_EXPIRED_OR_INVALID_DEBUG_KEY,
+     SpaySdk.ERROR_UNABLE_TO_VERIFY_CALLER,
+     SpaySdk.ERROR_PARTNER_APP_SIGNATURE_MISMATCH -> PaymentError(
+       ErrorCode.AUTH_FAILED,
+       "Authentication failed"
+     )
+     SpaySdk.ERROR_INVALID_INPUT -> PaymentError(
+       ErrorCode.VALIDATION,
+       "Invalid card selected",
+       recoverable = true
+     )
+     else -> PaymentError(
+       ErrorCode.SDK_ERROR,
+       "Samsung Pay error",
+       details = mapOf("code" to code)
+     )
+   }
+ }
+}
+
 class ExpoSamsungPayModule : Module() {
-  private val context get() = requireNotNull(appContext.reactContext)
-  private var paymentManager: PaymentManager? = null
-  private val TAG = "SamsungPayModule"
-  override fun definition() = ModuleDefinition {
-    Events("onPaymentCompleted", "onPaymentFailed")
-    AsyncFunction("canMakePayments") { serviceId: String, promise: Promise ->
-      val bundle = Bundle().apply {
-        putString(
-          SpaySdk.PARTNER_SERVICE_TYPE,
-          SpaySdk.ServiceType.INAPP_PAYMENT.toString()
-        )
-      }
-      val partnerInfo = PartnerInfo(serviceId, bundle)
-      val samsungPay = SamsungPay(context, partnerInfo)
-      samsungPay.getSamsungPayStatus(object : StatusListener {
-        override fun onSuccess(status: Int, bundle: Bundle) {
-          if (status == SpaySdk.SPAY_NOT_READY) {
-            samsungPay.activateSamsungPay()
-          }
-          promise.resolve(status == SpaySdk.SPAY_READY)
-        }
+ private val context get() = requireNotNull(appContext.reactContext)
+ private var paymentManager: PaymentManager? = null
+ private var samsungPay: SamsungPay? = null
+ private val TAG = "SamsungPay"
 
-        override fun onFail(errorCode: Int, bundle: Bundle) {
-          promise.resolve(false)
-        }
-      })
-    }
-    AsyncFunction("initiatePayment") { options: Map<String, Any> ->
-      val serviceId = options["serviceId"] as String
-      val merchantName = options["merchantName"] as? String
-      val merchantCountryCode = options["merchantCountryCode"] as? String
-      val orderNumber = options["orderNumber"] as? String
-      val amount = (options["amount"] as Number).toDouble()
+ override fun definition() = ModuleDefinition {
+   Events("onPaymentCompleted", "onPaymentFailed", "onPaymentStatusChanged")
 
-      // Validation
-      if (orderNumber.isNullOrEmpty() || merchantCountryCode.isNullOrEmpty() || merchantName.isNullOrEmpty()) {
-        sendEvent(
-          "onPaymentFailed", mapOf(
-            "status" to "error",
-            "errorDescription" to "orderNumber, merchantCountryCode, and merchantName required"
-          )
-        )
-        return@AsyncFunction
-      }
+   AsyncFunction("canMakePayments") { serviceId: String, promise: Promise ->
+     Validator.serviceId(serviceId)?.let { error ->
+       return@AsyncFunction promise.resolve(mapOf(
+         "success" to false,
+         "error" to error.toMap()
+       ))
+     }
 
-      @Suppress("UNCHECKED_CAST")
-      val items = options["items"] as? List<Map<String, Any>> ?: emptyList()
+     val bundle = Bundle().apply {
+       putString(SpaySdk.PARTNER_SERVICE_TYPE, SpaySdk.ServiceType.INAPP_PAYMENT.toString())
+     }
+     val partnerInfo = PartnerInfo(serviceId, bundle)
+     samsungPay = SamsungPay(context, partnerInfo)
 
-      @Suppress("UNCHECKED_CAST")
-      val allowedBrands = options["allowedCardBrands"] as? List<String> ?: listOf("VISA", "MASTERCARD", "MADA")
+     samsungPay?.getSamsungPayStatus(object : StatusListener {
+       override fun onSuccess(status: Int, bundle: Bundle) {
+         promise.resolve(mapOf(
+           "success" to true,
+           "data" to mapOf(
+             "canMakePayments" to (status == SpaySdk.SPAY_READY),
+             "status" to getStatusString(status),
+             "needsActivation" to (status == SpaySdk.SPAY_NOT_READY)
+           )
+         ))
+         
+         if (status == SpaySdk.SPAY_NOT_READY) {
+           samsungPay?.activateSamsungPay()
+         }
+       }
 
-      val bundle = Bundle().apply {
-        putString(
-          SpaySdk.PARTNER_SERVICE_TYPE,
-          SpaySdk.ServiceType.INAPP_PAYMENT.toString()
-        )
-      }
-      val partnerInfo = PartnerInfo(serviceId, bundle)
-      paymentManager = PaymentManager(context, partnerInfo)
+       override fun onFail(errorCode: Int, bundle: Bundle) {
+         val error = ErrorMapper.fromSdk(errorCode, bundle)
+         promise.resolve(mapOf(
+           "success" to false,
+           "error" to error.toMap()
+         ))
+       }
+     })
+   }
 
-      // Build AmountBoxControl
-      val amountBoxControl = AmountBoxControl("AMOUNT_CONTROL_ID", "SAR")
-      items.forEach { item ->
-        amountBoxControl.addItem(
-          item["id"] as String,
-          item["name"] as String,
-          (item["amount"] as Number).toDouble(),
-          item["description"] as? String ?: ""
-        )
-      }
-      amountBoxControl.setAmountTotal(amount, AmountConstants.FORMAT_TOTAL_PRICE_ONLY)
+   AsyncFunction("initiatePayment") { options: Map<String, Any>, promise: Promise ->
+     val serviceId = options["serviceId"] as? String
+     val merchantName = options["merchantName"] as? String
+     val merchantCountryCode = options["merchantCountryCode"] as? String
+     val orderNumber = options["orderNumber"] as? String
+     val amount = (options["amount"] as? Number)?.toDouble()
 
-      val customSheet = CustomSheet().apply {
-        addControl(amountBoxControl)
-      }
+     @Suppress("UNCHECKED_CAST")
+     val items = options["items"] as? List<Map<String, Any>> ?: emptyList()
+     
+     @Suppress("UNCHECKED_CAST")
+     val allowedBrands = options["allowedCardBrands"] as? List<String> ?: listOf("VISA", "MASTERCARD")
 
-      // Validate and convert brand list
-      val brandList = try {
-        validateAndConvertBrands(allowedBrands)
-      } catch (e: IllegalArgumentException) {
-        sendEvent(
-          "onPaymentFailed", mapOf(
-            "status" to "error",
-            "errorDescription" to e.message
-          )
-        )
-        return@AsyncFunction
-      }
+     listOf(
+       Validator.serviceId(serviceId),
+       Validator.amount(amount),
+       Validator.merchant(merchantName, merchantCountryCode),
+       Validator.orderNumber(orderNumber),
+       Validator.items(items)
+     ).firstOrNull()?.let { error ->
+       return@AsyncFunction promise.resolve(mapOf(
+         "success" to false,
+         "error" to error.toMap()
+       ))
+     }
 
-      val customSheetPaymentInfo = CustomSheetPaymentInfo.Builder()
-        .setMerchantName(merchantName)
-        .setOrderNumber(orderNumber)
-        .setMerchantCountryCode(merchantCountryCode)
-        .setAddressInPaymentSheet(CustomSheetPaymentInfo.AddressInPaymentSheet.DO_NOT_SHOW)
-        .setAllowedCardBrands(brandList)
-        .setCardHolderNameEnabled(true)
-        .setRecurringEnabled(false)
-        .setCustomSheet(customSheet)
-        .build()
+     val bundle = Bundle().apply {
+       putString(SpaySdk.PARTNER_SERVICE_TYPE, SpaySdk.ServiceType.INAPP_PAYMENT.toString())
+     }
+     val partnerInfo = PartnerInfo(serviceId!!, bundle)
+     paymentManager = PaymentManager(context, partnerInfo)
 
-      paymentManager?.startInAppPayWithCustomSheet(
-        customSheetPaymentInfo,
-        object : PaymentManager.CustomSheetTransactionInfoListener {
-          override fun onSuccess(
-            response: CustomSheetPaymentInfo,
-            paymentCredential: String,
-            extraPaymentData: Bundle
-          ) {
-            sendEvent(
-              "onPaymentCompleted", mapOf(
-                "status" to "success",
-                "credential" to paymentCredential
-              )
-            )
-          }
+     val amountBoxControl = buildAmountControl(items, amount!!)
+     val customSheet = CustomSheet().apply { addControl(amountBoxControl) }
+     val brandList = convertBrands(allowedBrands)
 
-          override fun onFailure(errorCode: Int, errorData: Bundle) {
-            val bundleData = errorData.keySet().joinToString { key ->
-              "$key=${errorData.getString(key)}"
-            }
+     val paymentInfo = CustomSheetPaymentInfo.Builder()
+       .setMerchantName(merchantName!!)
+       .setOrderNumber(orderNumber!!)
+       .setMerchantCountryCode(merchantCountryCode!!)
+       .setAddressInPaymentSheet(CustomSheetPaymentInfo.AddressInPaymentSheet.DO_NOT_SHOW)
+       .setAllowedCardBrands(brandList)
+       .setCardHolderNameEnabled(true)
+       .setRecurringEnabled(false)
+       .setCustomSheet(customSheet)
+       .build()
 
-            val detailedError = when (errorCode) {
-              SpaySdk.ERROR_INVALID_PARAMETER -> {
-                val errorReason = errorData.getString("errorReason") ?: "unknown"
-                val errorMessage =
-                  errorData.getString("errorReasonMessage") ?: "invalid parameter"
-                "Invalid parameter: $errorReason - $errorMessage"
-              }
+     paymentManager?.startInAppPayWithCustomSheet(
+       paymentInfo,
+       createPaymentListener(promise)
+     )
+   }
 
-              else -> "Error code: $errorCode"
-            }
+   AsyncFunction("cleanup") {
+     paymentManager = null
+     samsungPay = null
+   }
 
-            Log.e(TAG, "Payment failure: $detailedError | Bundle: [$bundleData]")
+   Name("ExpoSamsungPay")
+ }
 
-            sendEvent(
-              "onPaymentFailed", mapOf(
-                "status" to "error",
-                "errorCode" to errorCode,
-                "errorDescription" to detailedError,
-                "bundleData" to bundleData
-              )
-            )
-          }
+ private fun createPaymentListener(promise: Promise): PaymentManager.CustomSheetTransactionInfoListener {
+   return object : PaymentManager.CustomSheetTransactionInfoListener {
+     override fun onCardInfoUpdated(cardInfo: CardInfo?, customSheet: CustomSheet?) {}
 
-          override fun onCardInfoUpdated(
-            selectedCardInfo: CardInfo,
-            customSheet: CustomSheet
-          ) {
-            paymentManager?.updateSheet(customSheet)
-          }
-        }
-      )
+     override fun onSuccess(
+       response: CustomSheetPaymentInfo,
+       paymentCredential: String,
+       extraPaymentData: Bundle
+     ) {
+       val result = mapOf(
+         "status" to "success",
+         "credential" to paymentCredential,
+         "orderNumber" to response.orderNumber,
+         "merchantName" to response.merchantName,
+         "timestamp" to System.currentTimeMillis(),
+         "extraData" to bundleToMap(extraPaymentData)
+       )
+       
+       sendEvent("onPaymentCompleted", result)
+       promise.resolve(mapOf(
+         "success" to true,
+         "data" to result
+       ))
+     }
 
-    }
-    Name("ExpoSamsungPay")
+     override fun onFailure(errorCode: Int, errorData: Bundle) {
+       val error = ErrorMapper.fromSdk(errorCode, errorData)
+       sendEvent("onPaymentFailed", error.toMap())
+       promise.resolve(mapOf(
+         "success" to false,
+         "error" to error.toMap()
+       ))
+     }
+   }
+ }
 
-  }
-  private fun validateAndConvertBrands(brandStrings: List<String>): ArrayList<SpaySdk.Brand> {
-    val validBrands = mapOf(
-      "VISA" to SpaySdk.Brand.VISA,
-      "MASTERCARD" to SpaySdk.Brand.MASTERCARD,
-      "MADA" to SpaySdk.Brand.MADA,
-      "DISCOVER" to SpaySdk.Brand.DISCOVER,
-    )
+ private fun buildAmountControl(items: List<Map<String, Any>>, totalAmount: Double): AmountBoxControl {
+   val control = AmountBoxControl("AMOUNT_CONTROL_ID", "SAR")
+   
+   items.forEach { item ->
+     control.addItem(
+       item["id"] as String,
+       item["name"] as String,
+       (item["amount"] as Number).toDouble(),
+       item["description"] as? String ?: ""
+     )
+   }
+   
+   control.setAmountTotal(totalAmount, AmountConstants.FORMAT_TOTAL_PRICE_ONLY)
+   return control
+ }
 
-    if (brandStrings.isEmpty()) {
-      throw IllegalArgumentException("allowedCardBrands cannot be empty")
-    }
+ private fun convertBrands(brandStrings: List<String>): ArrayList<SpaySdk.Brand> {
+   val brandMap = mapOf(
+     "VISA" to SpaySdk.Brand.VISA,
+     "MASTERCARD" to SpaySdk.Brand.MASTERCARD,
+     "MADA" to SpaySdk.Brand.MADA,
+     "DISCOVER" to SpaySdk.Brand.DISCOVER,
+     "AMEX" to SpaySdk.Brand.AMERICANEXPRESS,
+     "AMERICANEXPRESS" to SpaySdk.Brand.AMERICANEXPRESS
+   )
 
-    val convertedBrands = arrayListOf<SpaySdk.Brand>()
-    val invalidBrands = mutableListOf<String>()
+   return ArrayList(brandStrings.mapNotNull { brandMap[it.uppercase()] })
+ }
 
-    brandStrings.forEach { brandString ->
-      val brand = validBrands[brandString.uppercase()]
-      if (brand != null) {
-        convertedBrands.add(brand)
-      } else {
-        invalidBrands.add(brandString)
-      }
-    }
+ private fun getStatusString(status: Int): String = when (status) {
+   SpaySdk.SPAY_READY -> "READY"
+   SpaySdk.SPAY_NOT_READY -> "NOT_READY"
+   SpaySdk.SPAY_NOT_SUPPORTED -> "NOT_SUPPORTED"
+   else -> "UNKNOWN"
+ }
 
-    if (invalidBrands.isNotEmpty()) {
-      val validBrandNames = validBrands.keys.joinToString(", ")
-      throw IllegalArgumentException("Invalid card brands: ${invalidBrands.joinToString(", ")}. Valid brands: $validBrandNames")
-    }
-
-    return convertedBrands
-  }
+ private fun bundleToMap(bundle: Bundle): Map<String, Any> {
+   return bundle.keySet().associate { key -> key to (bundle.get(key) ?: "null") }
+ }
 }

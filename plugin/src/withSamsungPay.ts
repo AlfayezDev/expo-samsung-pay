@@ -136,8 +136,6 @@ const withSamsungPay: ConfigPlugin<{
 				return config;
 			}
 
-			console.log(`✅ Verified Samsung Pay SDK JAR file: ${actualSourcePath}`);
-
 			// Define all target locations
 			const androidProjectRoot = path.join(projectRoot, "android");
 

@@ -1,14 +1,29 @@
 import { requireNativeModule } from "expo";
-import type { SamsungPayOptions } from "./ExpoSamsungPay.types";
+import type {
+	CanMakePaymentsResponse,
+	CanMakePaymentsResult,
+	InitiatePaymentResponse,
+	PaymentError,
+	PaymentStatus,
+	SamsungPayOptions,
+} from "./ExpoSamsungPay.types";
 
-declare class SamsungPayModule {
-	canMakePayments: (serviceId: string) => Promise<boolean>;
-	initiatePayment: (options: SamsungPayOptions) => Promise<void>;
-	addListener: (
-		eventName: string,
-		listener: (event: any) => void,
-	) => { remove: () => void };
+export interface SamsungPayModule {
+	canMakePayments(serviceId: string): Promise<CanMakePaymentsResponse>;
+	initiatePayment(options: SamsungPayOptions): Promise<InitiatePaymentResponse>;
+	cleanup(): Promise<void>;
+	addListener(
+		event: "onPaymentCompleted",
+		listener: (data: PaymentStatus) => void,
+	): { remove: () => void };
+	addListener(
+		event: "onPaymentFailed",
+		listener: (error: PaymentError) => void,
+	): { remove: () => void };
+	addListener(
+		event: "onPaymentStatusChanged",
+		listener: (status: CanMakePaymentsResult) => void,
+	): { remove: () => void };
 }
 
-// This call loads the native module object from the JSI.
 export default requireNativeModule<SamsungPayModule>("ExpoSamsungPay");
