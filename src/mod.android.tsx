@@ -44,6 +44,7 @@ export function SamsungPayButton(
 				allowedCardBrands: props.allowedCardBrands,
 				items: props.items,
 			}}
+			children={props.children}
 		/>
 	);
 }
