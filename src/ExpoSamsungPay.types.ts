@@ -1,3 +1,4 @@
+import { PropsWithChildren } from "react";
 import { DimensionValue } from "react-native";
 
 export interface PaymentError {
@@ -60,7 +61,7 @@ export interface ButtonOptions {
 	isLoading?: boolean;
 }
 
-export interface SamsungPayViewProps extends ButtonOptions {
+export interface SamsungPayViewProps extends ButtonOptions, PropsWithChildren {
 	width?: DimensionValue;
 	height?: DimensionValue;
 	onPaymentCompleted?: (data: InitiatePaymentResponse) => void;

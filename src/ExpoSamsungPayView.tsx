@@ -17,6 +17,7 @@ export default function SamsungPayView(props: SamsungPayViewProps) {
 		onPaymentFailed,
 		paymentOptions,
 		onPress,
+		children,
 	} = props;
 
 	const handlePress = useCallback(async () => {
@@ -62,6 +63,12 @@ export default function SamsungPayView(props: SamsungPayViewProps) {
 		fontSize: 16,
 		fontWeight: "600",
 	};
+	const Content = useCallback(() => {
+		if (children || !buttonText) {
+			return children;
+		}
+		return <Text style={textStyle}>{buttonText}</Text>;
+	}, [isLoading, buttonText]);
 
 	return (
 		<TouchableOpacity
@@ -76,7 +83,7 @@ export default function SamsungPayView(props: SamsungPayViewProps) {
 					size="small"
 				/>
 			) : (
-				<Text style={textStyle}>{buttonText}</Text>
+				<Content />
 			)}
 		</TouchableOpacity>
 	);
