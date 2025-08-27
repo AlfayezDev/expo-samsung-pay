@@ -47,3 +47,8 @@ export function SamsungPayButton(
 		/>
 	);
 }
+
+export default {
+	canMakePayments,
+	SamsungPayButton,
+};
