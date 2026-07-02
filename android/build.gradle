@@ -43,12 +43,12 @@ android {
 }
 dependencies {
   // Check if the AAR file exists in the libs directory
-  def jarFile = rootProject.file('libs/samsungpay.jar')
+  def jarFile = new File(rootProject.projectDir.parentFile, 'libs/samsungpay.jar')
   if (jarFile.exists()) {
     implementation files(jarFile)
   } else {
     // Provide a helpful error message
-    println "⚠️  Warning: Samsung Pay SDK (samsungpay.jar) not found in ${aarFile.absolutePath}"
+    println "⚠️  Warning: Samsung Pay SDK (samsungpay.jar) not found in ${jarFile.absolutePath}"
     println "⚠️  Please ensure the AAR file is copied during the prebuild process."
     println "⚠️  You can specify the AAR path in your app.json plugin configuration:"
     println '⚠️  ["expo-samsung-pay", { "aarPath": "./path/to/samsungpay.jar" }]'
